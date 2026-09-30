@@ -1,0 +1,8 @@
+target/
+demo/*.avro
+demo/*.csv
+.mvn/wrapper/dists/
+*.class
+dependency-reduced-pom.xml
+
+.idea/
