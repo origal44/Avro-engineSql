@@ -5,7 +5,6 @@ queries against it, with a handwritten lexer, parser, binder, and batch-based ex
 generators, no SQL libraries.
 
 ## Pipeline
-
 ```
 .avro file --(Stage 1: stub converter)--> typed .csv --(Stage 2: CsvDataSource)--> DataSource
                                                                                         |
@@ -32,7 +31,8 @@ SQL text --(Stage 3: Lexer)--> tokens --(Stage 4: Parser)--> AST --(Stage 5: Bin
   and type-checks every expression. `com.avroengine.exec` runs the bound query as a pipeline of
   batch operators (`ScanOperator -> FilterOperator -> ProjectOperator`), evaluating expressions with
   SQL three-valued logic (`TRUE`/`FALSE`/`UNKNOWN`; `WHERE` keeps only `TRUE`).
-- **Stage 6 -- CLI.** `com.avroengine.cli.Main`.
+- **Stage 6 -- CLI.** `com.avroengine.cli.Main` starts `InteractiveShell`: a guided prompt that
+  loads files and runs SQL.
 
 **Note for later:** the CSV layer (`stub.avro` + `CsvDataSource`) is a temporary stand-in for a
 handwritten Avro decoder. Once that decoder implements `DataSource` directly, it drops in without
@@ -51,41 +51,69 @@ boundary.
 
 ## Running it
 
-Prerequisites: JDK 21. Maven is not required -- the repo includes a Maven Wrapper.
+Prerequisites: JDK 21 or newer. Maven is not required -- the repo includes a Maven Wrapper.
+
+### Quick start
+
+Build once, then start the program:
 
 ```bash
-./mvnw test              # run the full JUnit test suite
-./mvnw package            # build target/engine.jar
-./demo.sh                 # build + run a full demo (see below)
+./mvnw package               # Windows PowerShell: .\mvnw.cmd package
+java -jar target/engine.jar
 ```
 
-On Windows without a POSIX shell, use `mvnw.cmd` instead of `./mvnw`.
+In IntelliJ, import `pom.xml` as a Maven project and run `com.avroengine.cli.Main`.
 
-### CLI
+The program greets you with step-by-step instructions and a prompt. A typical session:
+
+```
+engine> load C:\Users\me\Downloads\employees.avro
+Loaded table 'employees' with 9 columns:
+    id                   whole number
+    name                 text
+    ...
+
+sql> SELECT name, salary FROM employees WHERE department = 'HR' AND age > 50
+name          | salary
+--------------+---------
+Yossi Azulay  | 16993.71
+...
+(5 rows)
+
+sql> exit
+```
+
+| Command | What it does |
+|---|---|
+| `load <file> [as <name>]` | Load an `.avro` file (converted automatically) or an engine `.csv` file as a table. The table is named after the file unless `as <name>` is given. |
+| `sample` | Load the built-in demo data as table `employees`. |
+| `tables` | List loaded tables. |
+| `columns [<table>]` | Show a table's fields and their types. |
+| `examples` | Show ready-to-copy queries that use your table's real field names. |
+| `help` | Show all commands and a short SQL guide. |
+| `exit` | Quit. |
+| `SELECT ...` | Run a query. |
+
+Queries have the shape `SELECT <fields> FROM <table> [WHERE <condition>]`: fields go after
+`SELECT`/`WHERE`, the table name after `FROM`, and text values in single quotes (`'HR'`).
+Supported operators: `= <> != < <= > >= + - * / AND OR NOT IS [NOT] NULL`.
+
+### Build and test
 
 ```bash
-java -jar target/engine.jar convert <file.avro> <out.csv>
-
-java -jar target/engine.jar query <table-name>=<file.csv> [<table2>=<file2.csv> ...] "<SQL>"
-
-java -jar target/engine.jar generate-sample <out.avro>   # writes the demo dataset
+./mvnw test                  # run the full JUnit test suite
+./mvnw package               # build target/engine.jar (also runs the tests)
+./demo.sh                    # build + run a full demo (see below)
 ```
 
-Example:
-
-```bash
-java -jar target/engine.jar generate-sample demo/employees.avro
-java -jar target/engine.jar convert demo/employees.avro demo/employees.csv
-java -jar target/engine.jar query "employees=demo/employees.csv" \
-    "SELECT id, name FROM employees WHERE manager_id IS NULL"
-```
+On Windows without a POSIX shell, use `.\mvnw.cmd` instead of `./mvnw`.
 
 ### Demo
 
-`./demo.sh` builds the project (running all tests), generates the sample `employees` dataset
-(20 rows, including NULLs and an empty string), converts it to CSV, and runs five queries that show
-`SELECT *`, projection, `WHERE` with `AND`/`OR` precedence, `IS NULL`, and a type error being
-rejected with a clear message.
+`./demo.sh` builds the project (running all tests), then feeds a scripted session into the
+interactive shell: it loads the sample `employees` dataset (20 rows, including NULLs and an empty
+string) and runs five queries that show `SELECT *`, projection, `WHERE` with `AND`/`OR` precedence,
+`IS NULL`, and a type error being rejected with a clear message.
 
 ## Tests
 
